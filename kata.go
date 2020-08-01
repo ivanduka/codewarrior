@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -8,72 +9,58 @@ import (
 	"strconv"
 )
 
-type crackingUnit struct {
+type arguments struct {
 	start   int
 	end     int
 	padding int
 	target  string
-	result  chan<- string
-	done    <-chan struct{}
+	ch      chan<- string
+	ctx     context.Context
 }
 
-func crackPart(cu crackingUnit) {
-	for i := cu.start; i <= cu.end; i += 1 {
+func crackPart(args arguments) {
+	for i := args.start; i <= args.end; i += 1 {
 		select {
-		case <-cu.done:
-			fmt.Println("Woot!!!")
-			cu.result <- ""
+		case <-args.ctx.Done():
+			fmt.Println("Returning early!")
 			return
 		default:
-			paddedString := fmt.Sprintf("%0*d", cu.padding, i)
+			paddedString := fmt.Sprintf("%0*d", args.padding, i)
 			currentHash := md5.Sum([]byte(paddedString))
 			currentHashString := hex.EncodeToString(currentHash[:])
-			if currentHashString == cu.target {
-				fmt.Println("Found!!!")
-				cu.result <- paddedString
-				<-cu.done
+			if currentHashString == args.target {
+				fmt.Println("Found!")
+				args.ch <- paddedString
 				return
 			}
 		}
 	}
-	fmt.Println("Wow!!!")
-	cu.result <- ""
-	<-cu.done
+	fmt.Println("Not found!")
 }
 
 const maximum = 99999999
 
 func Crack(hash string) string {
 	workUnits := divideIntegers()
-	result := make(chan string)
-	defer close(result)
-	done := make(chan struct{}, len(workUnits))
-	defer close(done)
+	ch := make(chan string)
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	padding := len(strconv.Itoa(maximum))
 
 	for _, pair := range workUnits {
-		cu := crackingUnit{
+		args := arguments{
 			start:   pair[0],
 			end:     pair[1],
 			padding: padding,
 			target:  hash,
-			result:  result,
-			done:    done,
+			ch:      ch,
+			ctx:     ctx,
 		}
-		go crackPart(cu)
+		go crackPart(args)
 	}
 
-	var correctAnswer string
-	for range workUnits {
-		data := <-result
-		if data != "" {
-			correctAnswer = data
-			for range workUnits {
-				done <- struct{}{}
-			}
-		}
-	}
-	return correctAnswer
+	return <-ch
 }
 
 func md5Hash(s string) string {
