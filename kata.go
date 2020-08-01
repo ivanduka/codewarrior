@@ -18,7 +18,7 @@ type arguments struct {
 	ctx     context.Context
 }
 
-func crackPart(args arguments) {
+func crackPart(args *arguments) {
 	for i := args.start; i <= args.end; i += 1 {
 		select {
 		case <-args.ctx.Done():
@@ -38,7 +38,7 @@ func crackPart(args arguments) {
 	fmt.Println("Not found!")
 }
 
-const maximum = 99999999
+const maximum = 9999999
 
 func Crack(hash string) string {
 	workUnits := divideIntegers()
@@ -57,7 +57,7 @@ func Crack(hash string) string {
 			ch:      ch,
 			ctx:     ctx,
 		}
-		go crackPart(args)
+		go crackPart(&args)
 	}
 
 	return <-ch

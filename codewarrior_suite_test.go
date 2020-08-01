@@ -21,10 +21,10 @@ var _ = Describe("Should pass all of these", func() {
 	//It("Should work with harder PIN", func() {
 	//	Expect(Crack("86aa400b65433b608a9db30070ec60cd")).To(Equal("00078"))
 	//})
-	//It("Should work with a very hard PIN", func() {
-	//	Expect(Crack("283f42764da6dba2522412916b031080")).To(Equal("9999999"))
-	//})
 	It("Should work with a very hard PIN", func() {
-		Expect(Crack("ef775988943825d2871e1cfa75473ec0")).To(Equal("99999999"))
+		Expect(Crack("283f42764da6dba2522412916b031080")).To(Equal("9999999"))
 	})
+	//It("Should work with a very hard PIN", func() {
+	//	Expect(Crack("ef775988943825d2871e1cfa75473ec0")).To(Equal("99999999"))
+	//})
 })
