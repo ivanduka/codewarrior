@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -14,38 +13,39 @@ type arguments struct {
 	end     int
 	padding int
 	target  string
-	ch      chan<- string
-	ctx     context.Context
+	results chan<- string
+	done    <-chan struct{}
 }
 
-func crackPart(args *arguments) {
+func crackPart(args arguments) {
 	for i := args.start; i <= args.end; i += 1 {
 		select {
-		case <-args.ctx.Done():
-			fmt.Println("Returning early!")
+		case <-args.done:
+			args.results <- ""
 			return
 		default:
 			paddedString := fmt.Sprintf("%0*d", args.padding, i)
 			currentHash := md5.Sum([]byte(paddedString))
 			currentHashString := hex.EncodeToString(currentHash[:])
 			if currentHashString == args.target {
-				fmt.Println("Found!")
-				args.ch <- paddedString
+				args.results <- paddedString
+				<-args.done
 				return
 			}
 		}
 	}
-	fmt.Println("Not found!")
+	args.results <- ""
+	<-args.done
 }
 
-const maximum = 9999999
+const maximum = 99999
 
 func Crack(hash string) string {
 	workUnits := divideIntegers()
-	ch := make(chan string)
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	results := make(chan string)
+	defer close(results)
+	done := make(chan struct{})
+	defer close(done)
 	padding := len(strconv.Itoa(maximum))
 
 	for _, pair := range workUnits {
@@ -54,13 +54,25 @@ func Crack(hash string) string {
 			end:     pair[1],
 			padding: padding,
 			target:  hash,
-			ch:      ch,
-			ctx:     ctx,
+			results: results,
+			done:    done,
 		}
-		go crackPart(&args)
+		go crackPart(args)
 	}
 
-	return <-ch
+	var correctAnswer string
+
+	for range workUnits {
+		result := <-results
+		if result != "" {
+			correctAnswer = result
+			for range workUnits {
+				done <- struct{}{}
+			}
+		}
+	}
+
+	return correctAnswer
 }
 
 func md5Hash(s string) string {
