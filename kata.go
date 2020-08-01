@@ -14,27 +14,41 @@ type crackingUnit struct {
 	padding int
 	target  string
 	result  chan<- string
+	done    <-chan struct{}
 }
 
 func crackPart(cu crackingUnit) {
 	for i := cu.start; i <= cu.end; i += 1 {
-		paddedString := fmt.Sprintf("%0*d", cu.padding, i)
-		currentHash := md5.Sum([]byte(paddedString))
-		currentHashString := hex.EncodeToString(currentHash[:])
-		if currentHashString == cu.target {
-			cu.result <- paddedString
+		select {
+		case <-cu.done:
+			fmt.Println("Woot!!!")
+			cu.result <- ""
 			return
+		default:
+			paddedString := fmt.Sprintf("%0*d", cu.padding, i)
+			currentHash := md5.Sum([]byte(paddedString))
+			currentHashString := hex.EncodeToString(currentHash[:])
+			if currentHashString == cu.target {
+				fmt.Println("Found!!!")
+				cu.result <- paddedString
+				<-cu.done
+				return
+			}
 		}
 	}
+	fmt.Println("Wow!!!")
 	cu.result <- ""
+	<-cu.done
 }
 
-const maximum = 9999999
+const maximum = 99999999
 
 func Crack(hash string) string {
 	workUnits := divideIntegers()
 	result := make(chan string)
 	defer close(result)
+	done := make(chan struct{}, len(workUnits))
+	defer close(done)
 	padding := len(strconv.Itoa(maximum))
 
 	for _, pair := range workUnits {
@@ -44,6 +58,7 @@ func Crack(hash string) string {
 			padding: padding,
 			target:  hash,
 			result:  result,
+			done:    done,
 		}
 		go crackPart(cu)
 	}
@@ -53,6 +68,9 @@ func Crack(hash string) string {
 		data := <-result
 		if data != "" {
 			correctAnswer = data
+			for range workUnits {
+				done <- struct{}{}
+			}
 		}
 	}
 	return correctAnswer
@@ -65,7 +83,6 @@ func md5Hash(s string) string {
 
 func divideIntegers() [][2]int {
 	numCPU := runtime.NumCPU()
-	//numCPU := 1
 	slice := make([][2]int, numCPU)
 	division := maximum / numCPU
 	lastStart := -1
